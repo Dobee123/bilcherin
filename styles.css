@@ -1,0 +1,84 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(circle at top, #1f2937, #0f172a);
+  color: #f8fafc;
+  font-family: "Pretendard", "Noto Sans KR", sans-serif;
+}
+
+.game-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: center;
+  padding: 2rem;
+}
+
+#game {
+  position: relative;
+  width: 400px;
+  height: 400px;
+  border: 3px solid #38bdf8;
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.85);
+  box-shadow: 0 1.5rem 3rem rgba(2, 6, 23, 0.6);
+  overflow: hidden;
+}
+
+#player {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #f97316, #facc15);
+  border-radius: 10px;
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.4);
+  transform: translate(180px, 180px);
+}
+
+.instructions {
+  background: rgba(15, 23, 42, 0.7);
+  padding: 1.5rem;
+  border-radius: 1rem;
+  max-width: 400px;
+  line-height: 1.6;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.5);
+}
+
+.instructions h1 {
+  margin: 0 0 1rem;
+  font-size: 1.75rem;
+  color: #38bdf8;
+}
+
+.instructions ul {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+}
+
+.instructions kbd {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  border-radius: 6px;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 540px) {
+  #game {
+    width: 320px;
+    height: 320px;
+  }
+
+  #player {
+    transform: translate(140px, 140px);
+  }
+}
