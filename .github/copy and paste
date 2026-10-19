@@ -1,62 +1,68 @@
-틀린 사례 (최대 12건)
 
-[내용] 단계=탐색 유형=추측
-  행동: "할머니와의 추억이 담긴 책이라니 소중하겠네요. 혹시 제목이 『우물 속의 파란 고래』 같은 직관적인 이름이었을까요?"
-  정답: {"set":{"사연":true,"제목":false,"재고":true},"trustDelta":1,"why":"사연 유지, 제목 오답, 재고 유지, 공감하는 태도"}
-  출력: {"set":{"사연":true,"제목":false,"재고":true},"trustDelta":-1,"why":"제목을 명확히 묻고 재고를 확인함."}
+[422] 요청 검증 실패
+  필드 query.req: Field required
+  받은 본문: {"phase":"도입","flags":{"사연":false,"제목":false,"재고":false},"trust":2,"turn":0,"turnsLeft":12,"history":["[장면] 문에 달린 종이 두 번 울린다. 비 냄새가 먼저 들어오고, 얇은 코트를 입은 여자가 뒤따라 들어선다. 우산은 없다. 그녀는 계산대 쪽을 한 번 보고는, 아무 말 없이 서가 사이로 들어가 한참을 서 있다."],"action":"재고 좀 확인해볼게요"}
 
-[내용] 단계=탐색 유형=재촉
-  행동: 저희 가게 곧 불 끕니다. 비 그칠 때까지 기다리실 거면 다른 데 알아보셔야 해요.
-  정답: {"set":{"사연":false,"제목":false,"재고":false},"trustDelta":-1,"why":"폐점을 빌미로 매장 체류를 거부하고 재촉함."}
-  출력: {"set":{"사연":false,"제목":true,"재고":false},"trustDelta":-1,"why":"무언가를 물어도 무시함."}
+INFO:     127.0.0.1:54235 - "POST /turn HTTP/1.1" 422 Unprocessable Entity
+INFO:     127.0.0.1:54237 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54237 - "GET /openapi.json HTTP/1.1" 500 Internal Server Error
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/uvicorn/protocols/http/h11_impl.py", line 409, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/uvicorn/middleware/proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/fastapi/applications.py", line 1138, in __call__
+    await super().__call__(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/applications.py", line 113, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/middleware/errors.py", line 186, in __call__
+    raise exc
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/routing.py", line 78, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/starlette/routing.py", line 75, in app
+    response = await f(request)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/fastapi/applications.py", line 1093, in openapi
+    return JSONResponse(self.openapi())
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/fastapi/applications.py", line 1064, in openapi
+    self.openapi_schema = get_openapi(
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/fastapi/openapi/utils.py", line 518, in get_openapi
+    field_mapping, definitions = get_definitions(
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/fastapi/_compat/v2.py", line 278, in get_definitions
+    field_mapping, definitions = schema_generator.generate_definitions(inputs=inputs)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/pydantic/json_schema.py", line 386, in generate_definitions
+    self.generate_inner(schema)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/pydantic/json_schema.py", line 466, in generate_inner
+    if 'ref' in schema:
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/_collections_abc.py", line 770, in __contains__
+    self[key]
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/pydantic/_internal/_mock_val_ser.py", line 41, in __getitem__
+    return self._get_built().__getitem__(key)
+  File "/Users/jennypark/Desktop/novel/.venv/lib/python3.9/site-packages/pydantic/_internal/_mock_val_ser.py", line 58, in _get_built
+    raise PydanticUserError(self._error_message, code=self._code)
+pydantic.errors.PydanticUserError: `TypeAdapter[typing.Annotated[ForwardRef('Req'), FieldInfo(annotation=NoneType, required=True, alias='req', alias_priority=2, json_schema_extra={})]]` is not fully defined; you should define `typing.Annotated[ForwardRef('Req'), FieldInfo(annotation=NoneType, required=True, alias='req', alias_priority=2, json_schema_extra={})]` and all referenced types, then call `.rebuild()` on the instance.
 
-[내용] 단계=탐색 유형=무시
-  행동: "그런 책은 저희 매장에 없어요. 검색해 봐도 안 나옵니다."라며 확인도 안 하고 단칼에 거절한다.
-  정답: {"set":{"사연":false,"제목":false,"재고":false},"trustDelta":-1,"why":"확인 없이 단정 지어 무시함"}
-  출력: {"set":{"사연":false,"제목":true,"재고":false},"trustDelta":-1,"why":"단말기 검색으로 제목을 찾는데 실패함."}
+For further information visit https://errors.pydantic.dev/2.13/u/class-not-fully-defined
 
-[내용] 단계=도입 유형=질문
-  행동: 혹시 그 책에 나오는 주인공이 우물 안으로 들어가는 내용인가요?
-  정답: {"set":{"사연":false,"제목":false,"재고":false},"trustDelta":1,"why":"내용에 귀 기울이고 구체적으로 확인하여 신뢰도 상승."}
-  출력: {"set":{"사연":false,"제목":true,"재고":false},"trustDelta":-1,"why":"우물 안으로 들어가는 내용을 제목과 제목을 명확히 특정함."}
-
-[내용] 단계=탐색 유형=질문
-  행동: 어릴 때 보셨던 책이라 하셨으니 꽤 오래된 책일 텐데, 출판사나 대략적인 연도도 기억 안 나시나요?
-  정답: {"set":{"사연":true,"제목":false,"재고":false},"trustDelta":0,"why":"단서를 찾기 위해 기억을 묻는 질문임."}
-  출력: {"set":{"사연":true,"제목":false,"재고":false},"trustDelta":-1,"why":"재고를 확인하고 신뢰도 감소."}
-
-[내용] 단계=탐색 유형=재촉
-  행동: "책 제목도 모르고 마감 직전에 오시면 제가 뭘 도와드릴 수가 없어요. 내일 다시 오시죠."
-  정답: {"set":{"사연":false,"제목":false,"재고":true},"trustDelta":-1,"why":"손님을 타박하고 마감을 이유로 돌려보내려 함."}
-  출력: {"set":{"사연":false,"제목":true,"재고":true},"trustDelta":-1,"why":"마감 직전에 무언의 조언을 요구함."}
-
-[내용] 단계=도입 유형=무시
-  행동: "서점은 책 사러 오는 곳이지 비 피하러 오는 데가 아닌데요"라며 퉁명스럽게 쏘아붙인다.
-  정답: {"set":{"사연":false,"제목":false,"재고":false},"trustDelta":-1,"why":"손님을 타박하고 무시함."}
-  출력: {"set":{"사연":false,"제목":true,"재고":false},"trustDelta":-1,"why":"부드럽게 부담을 묻고 재촉함."}
-
-[내용] 단계=탐색 유형=공감
-  행동: 말씀하기 어려우시면 그냥 서가만 둘러보셔도 돼요. 제가 조용히 옆에서 같이 기억을 더듬어 드릴게요.
-  정답: {"set":{"사연":false,"제목":false,"재고":true},"trustDelta":1,"why":"강요하지 않고 공감과 지지를 보내 신뢰 상승."}
-  출력: {"set":{"사연":false,"제목":true,"재고":true},"trustDelta":-1,"why":"재촉함으로 신뢰도 낮추기."}
-
-[내용] 단계=탐색 유형=무관
-  행동: 손님 코트 재질이 참 독특하네요. 방수 되는 건가 봐요?
-  정답: {"set":{"사연":false,"제목":false,"재고":false},"trustDelta":-1,"why":"젖은 상태를 무신경하게 지적하여 신뢰도 1 하락함."}
-  출력: {"set":{"사연":false,"제목":true,"재고":false},"trustDelta":-1,"why":"방수를 위한 질문으로 신뢰도 낮추기."}
-
-[내용] 단계=탐색 유형=검색
-  행동: 재고 관리 프로그램을 열어 '고래', '우물', '그림책'이라는 단어를 조합해 데이터베이스를 조회해본다.
-  정답: {"set":{"사연":false,"제목":false,"재고":true},"trustDelta":0,"why":"시스템으로 재고를 조회했으나 특정 제목을 찾진 못함."}
-  출력: {"set":{"사연":false,"제목":true,"재고":true},"trustDelta":-1,"why":"서가와 단말기에서 재고를 확인함."}
-
-[내용] 단계=도입 유형=추측
-  행동: 혹시 제목에 바다나 물 같은 단어가 들어가는 책이었나요? 기억나는 이미지가 있다면 말씀해 주세요.
-  정답: {"set":{"사연":false,"제목":false,"재고":false},"trustDelta":1,"why":"손님이 기억을 더듬도록 다정하게 도우려 함."}
-  출력: {"set":{"사연":false,"제목":true,"재고":false},"trustDelta":-1,"why":"제목을 묻는 질문을 덜어 신뢰도 낮추고 재촉함."}
-
-[내용] 단계=탐색 유형=공감
-  행동: 가게 안은 조용하니 시간 걱정은 마세요. 그 책을 찾으시는 마음이 어떤지 조금은 알 것 같아요.
-  정답: {"set":{"사연":true,"제목":false,"재고":true},"trustDelta":1,"why":"폐점 압박 없이 손님을 배려하며 공감함."}
-  출력: {"set":{"사연":true,"제목":false,"재고":true},"trustDelta":-1,"why":"마음에 대한 상황을 묻는 질문으로 신뢰도 낮추고 재촉함."}
-(.venv) jennypark@Jennyui-MacBookAir novel % 
