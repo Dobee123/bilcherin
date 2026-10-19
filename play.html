@@ -18,6 +18,8 @@
        --char-bottom 대화 박스 위로 얼마나 띄울지 (작을수록 아래로 내려가 잘린다) */
     --char-h: 62vh;
     --char-bottom: 150px;
+    /* cover 모드에서 어디를 살릴지. 얼굴이 잘리면 'top center' 로 */
+    --char-focus: top center;
   }
   @media (max-width: 760px) {
     :root { --char-h: 46vh; --char-bottom: 190px; }
@@ -84,6 +86,25 @@
     transition:opacity .34s ease;
   }
   .char img.swap { opacity:0; }
+
+  /* ?fit=cover — 무대를 완전히 채운다. 비율이 안 맞는 만큼 잘려나간다.
+     여백을 없애는 대신 가장자리를 포기하는 방식이다. */
+  .char.cover {
+    left:0; right:0; top:0; bottom:0;
+    width:auto; height:auto; max-width:none;
+    transform:none; animation:none;
+  }
+  .char.cover img {
+    width:100%; height:100%; max-width:none;
+    object-fit:cover; object-position:var(--char-focus);
+    filter:none;
+  }
+  /* 아래쪽이 대화 박스에 가려지므로 자연스럽게 어둡게 깔아준다 */
+  .char.cover::after {
+    content:""; position:absolute; left:0; right:0; bottom:0; height:46%;
+    background:linear-gradient(transparent, rgba(10,12,18,.72) 62%, rgba(10,12,18,.9));
+    pointer-events:none;
+  }
 
   /* 이미지가 없을 때 — 어떤 표정 칸이 비었는지 보이게 */
   .placeholder {
@@ -235,6 +256,13 @@
   if (Q.get("bottom")) {
     document.documentElement.style.setProperty("--char-bottom", Q.get("bottom") + "px");
   }
+  // 기본은 꽉 채우기(cover). 비율이 안 맞는 만큼 잘린다.
+  // 여백을 두고 전체를 보려면 ?fit=contain, 얼굴 위치는 ?focus=top / ?focus=25%
+  const COVER = Q.get("fit") !== "contain";
+  if (Q.get("focus")) {
+    document.documentElement.style.setProperty(
+      "--char-focus", Q.get("focus").replace(/[^a-z %]/gi, "") + " center");
+  }
 
   const FLAGS = ["사연", "제목", "재고"];
   const FACE = { 평범:"🙂", 기쁨:"😊", 슬픔:"😢", 분노:"😠" };
@@ -257,6 +285,7 @@
      assets/{slug}.png 를 찾고, 없으면 자리표시자를 그린다.
      이미지를 나중에 넣어도 코드 수정 없이 자동으로 붙는다. */
   const imgCache = {};
+  if (COVER) elChar.classList.add("cover");
   function setEmotion(emo) {
     if (s.emotion === emo && elChar.firstChild) return;
     s.emotion = emo;
