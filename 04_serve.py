@@ -1,0 +1,324 @@
+#!/usr/bin/env python3
+"""
+판정 모델 추론 서버.
+
+학습한 어댑터를 올리고 HTTP 로 판정을 받는다. 장치는 자동 감지한다.
+
+  python 04_serve.py --adapter out/smoke
+  python 04_serve.py --adapter out/judge-lora --port 8000
+
+핵심은 모델 출력을 그대로 내보내지 않는다는 것이다. 세 겹으로 조인다.
+
+  1) 스키마 검증   — 형식이 깨지면 거부
+  2) 단조성 강제   — false -> true 만 허용. 되돌림은 코드가 무시한다
+  3) 제목 교차검증 — 점원 발화에 실제 제목 문자열이 없으면 제목 플래그를 끈다
+
+3번이 특히 중요하다. 제목은 전이 함수에서 종료에 직결되는 플래그라,
+오탐이 나면 유저가 아무것도 못 찾았는데 '찾았습니다' 엔딩이 나온다.
+문자열 매칭으로 판정 가능한 일을 모델에게 맡길 이유가 없다.
+
+  pip install fastapi uvicorn
+"""
+
+from __future__ import annotations
+import argparse, json, re, sys
+from pathlib import Path
+
+import spec
+
+# 제목 특정으로 인정할 표현. 모델 판단보다 이쪽을 신뢰한다.
+TITLE_PATTERNS = [
+    r"고래가\s*사는\s*우물",
+    r"『\s*고래가\s*사는\s*우물\s*』",
+]
+
+
+def title_mentioned(action: str) -> bool:
+    return any(re.search(p, action) for p in TITLE_PATTERNS)
+
+
+# 요청 모델. build_app 이 채운다. 모듈 전역이어야 FastAPI 가
+# 핸들러의 `req: Req` 힌트를 해석할 수 있다 (위 _make_req_model 주석 참고).
+Req = None
+
+
+class Judge:
+    def __init__(self, adapter: str, base: str | None, max_tokens: int):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from peft import PeftModel
+
+        self.torch = torch
+        self.max_tokens = max_tokens
+
+        if base is None:
+            p = Path(adapter) / "base_model.txt"
+            if not p.exists():
+                sys.exit("--base 를 지정하세요 (base_model.txt 가 없습니다)")
+            base = p.read_text(encoding="utf-8").strip()
+
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
+        print(f"장치 {self.device} · 베이스 {base}")
+
+        self.tok = AutoTokenizer.from_pretrained(adapter, trust_remote_code=True)
+        load_kw: dict = {"trust_remote_code": True}
+        if self.device == "cuda":
+            from transformers import BitsAndBytesConfig
+            load_kw["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True, bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.bfloat16)
+            load_kw["dtype"] = torch.bfloat16
+            load_kw["device_map"] = {"": 0}
+        else:
+            load_kw["dtype"] = torch.float32
+
+        model = AutoModelForCausalLM.from_pretrained(base, **load_kw)
+        if self.device != "cuda":
+            model = model.to(self.device)
+        self.model = PeftModel.from_pretrained(model, adapter).eval()
+        print("모델 적재 완료")
+
+    def _generate(self, prompt: str) -> str:
+        ids = self.tok.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            tokenize=True, add_generation_prompt=True,
+            return_tensors="pt").to(self.model.device)
+        with self.torch.no_grad():
+            out = self.model.generate(
+                ids, max_new_tokens=self.max_tokens, do_sample=False,
+                pad_token_id=self.tok.pad_token_id or self.tok.eos_token_id)
+        return self.tok.decode(out[0][ids.shape[-1]:],
+                              skip_special_tokens=True).strip()
+
+    def judge(self, state: dict, history: list[str], action: str) -> dict:
+        prompt = spec.build_prompt(state, history, action)
+        raw = self._generate(prompt)
+
+        try:
+            got = json.loads(raw[raw.index("{"): raw.rindex("}") + 1])
+        except (ValueError, json.JSONDecodeError):
+            got = None
+
+        notes: list[str] = []
+        before = state["flags"]
+
+        if got is None or not spec.validate(got):
+            # 형식이 깨지면 '아무것도 바뀌지 않음'으로 떨어뜨린다.
+            # 판정 실패가 이야기를 망치는 것보다 한 턴 제자리가 낫다.
+            notes.append("형식 오류 — 변화 없음으로 처리")
+            after = dict(before)
+            delta, why = 0, "판정 실패"
+        else:
+            after = {f: bool(got["set"][f]) for f in spec.FLAGS}
+            delta = max(-1, min(1, int(got["trustDelta"])))
+            why = str(got["why"])
+
+        # 단조성: false -> true 만 허용
+        for f in spec.FLAGS:
+            if before[f] and not after[f]:
+                after[f] = True
+                notes.append(f"{f} 되돌림 차단")
+
+        # 제목 교차검증: 발화에 실제 제목이 없으면 끈다
+        if after["제목"] and not before["제목"] and not title_mentioned(action):
+            after["제목"] = False
+            notes.append("제목 오탐 차단 — 발화에 제목 없음")
+
+        trust = max(spec.TRUST_MIN, min(spec.TRUST_MAX, state["trust"] + delta))
+        turn = state["turn"] + 1
+        turns_left = state["turns_left"] - 1
+        ending, phase = spec.transition(
+            state["phase"], after, trust, turn, turns_left)
+
+        return {
+            "flags": after,
+            "trust": trust,
+            "turn": turn,
+            "turnsLeft": turns_left,
+            "phase": phase,
+            "ending": ending,
+            "why": why,
+            "notes": notes,
+            "raw": raw,
+        }
+
+
+class Narrator:
+    """장면 묘사용. 판정 모델과 역할이 다르다 — 이쪽은 재미, 저쪽은 정확성.
+    브라우저에서 직접 부르면 API 키가 노출되므로 서버가 중계한다.
+    키가 없으면 고정 문구로 떨어진다(배선 확인에는 충분)."""
+
+    def __init__(self) -> None:
+        import os
+        self.client = None
+        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not key:
+            print("서술: GEMINI_API_KEY 없음 — 고정 문구로 대체합니다")
+            return
+        try:
+            from google import genai
+            self.client = genai.Client(api_key=key)
+            self.model = os.environ.get("NARRATOR_MODEL", "gemini-3.5-flash-lite")
+            print(f"서술: {self.model}")
+        except ImportError:
+            print("서술: google-genai 미설치 — 고정 문구로 대체합니다")
+
+    def narrate(self, state: dict, history: list[str], action: str,
+                ending: str | None) -> str:
+        if self.client is None:
+            return ("(서술 모델 미연결) 손님이 점원의 말에 반응한다. "
+                    "판정 결과는 오른쪽 패널에서 확인하세요.")
+        hist = "\n".join(history[-6:]) or "(아직 없음)"
+        if ending:
+            task = (f"엔진이 결말 [{ending}] 을 확정했다. 이 결말에 맞는 "
+                    "에필로그를 4~6문장으로 써라. 결말을 뒤집지 마라.")
+        else:
+            task = ("이번 턴의 장면을 2~4문장으로 써라. 손님의 대사와 행동 위주. "
+                    "절대 이야기를 끝내지 마라.")
+        prompt = f"""너는 인터랙티브 소설의 '서술 모듈'이다. 판정은 네 일이 아니다.
+
+[세계 설정]
+{spec.WORLD}
+
+[현재 상태]
+단계 {state['phase']} · 신뢰 {state['trust']}/3 · 남은 턴 {state['turns_left']}
+플래그 사연={state['flags']['사연']}, 제목={state['flags']['제목']}, 재고={state['flags']['재고']}
+
+[지금까지]
+{hist}
+
+[점원의 행동]
+{action}
+
+[할 일]
+{task}
+한국어 산문만. JSON 금지."""
+        try:
+            r = self.client.models.generate_content(
+                model=self.model, contents=prompt)
+            return (r.text or "").strip() or "(빈 응답)"
+        except Exception as e:
+            return f"(서술 실패: {type(e).__name__})"
+
+
+def _make_req_model():
+    """요청 모델은 반드시 모듈 최상위에 둬야 한다.
+
+    이 파일은 `from __future__ import annotations` 를 쓰기 때문에 모든 타입
+    힌트가 문자열로 남는다. 모델을 함수 안에 정의하면 FastAPI 가 핸들러의
+    `req: Req` 를 해석할 때 지역 클래스를 찾지 못하고, Pydantic 모델이 아닌
+    것으로 보아 쿼리 파라미터로 처리한다 -> 'query.req: Field required' 422.
+    """
+    from typing import Dict, List
+    from pydantic import BaseModel, Field
+
+    class Req(BaseModel):
+        model_config = {"extra": "ignore"}
+
+        action: str
+        phase: str = "도입"
+        flags: Dict[str, bool] = Field(
+            default_factory=lambda: {f: False for f in spec.FLAGS})
+        trust: int = 2
+        turn: int = 0
+        turnsLeft: int = spec.TURNS_START
+        history: List[str] = Field(default_factory=list)
+
+    return Req
+
+
+def build_app(judge: Judge, narrator: "Narrator"):
+    from fastapi import FastAPI, Request
+    from fastapi.exceptions import RequestValidationError
+    from fastapi.responses import JSONResponse
+    from fastapi.middleware.cors import CORSMiddleware
+
+    global Req
+    Req = _make_req_model()
+
+    app = FastAPI(title="판정 모델 서버")
+    # 브라우저에서 직접 부를 수 있게. 공개 배포 시에는 origin 을 좁힐 것.
+    app.add_middleware(CORSMiddleware, allow_origins=["*"],
+                       allow_methods=["*"], allow_headers=["*"])
+
+    @app.exception_handler(RequestValidationError)
+    async def on_invalid(request: Request, exc: RequestValidationError):
+        """어느 필드가 왜 거부됐는지 터미널에도 남긴다."""
+        print("\n[422] 요청 검증 실패")
+        for e in exc.errors():
+            print(f"  필드 {'.'.join(str(x) for x in e.get('loc', []))}: {e.get('msg')}")
+        try:
+            print(f"  받은 본문: {(await request.body()).decode('utf-8')[:400]}\n")
+        except Exception:
+            pass
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+    @app.get("/health")
+    def health():
+        return {"ok": True, "device": judge.device, "flags": spec.FLAGS}
+
+    def _state(req: Req) -> dict:
+        return {
+            "phase": req.phase,
+            "flags": {f: bool(req.flags.get(f, False)) for f in spec.FLAGS},
+            "trust": req.trust,
+            "turn": req.turn,
+            "turns_left": req.turnsLeft,
+        }
+
+    @app.post("/judge")
+    def do_judge(req: Req):
+        """판정만. 내 모델이 하는 일."""
+        return judge.judge(_state(req), [str(h) for h in req.history], req.action)
+
+    @app.post("/turn")
+    def do_turn(req: Req):
+        """판정 + 서술. UI 가 쓰는 엔드포인트.
+        순서가 중요하다 — 먼저 판정하고 상태를 확정한 뒤, 그 결과에 맞춰
+        서술한다. 서술이 먼저면 이야기가 상태와 어긋난다."""
+        state = _state(req)
+        history = [str(h) for h in req.history]
+        result = judge.judge(state, history, req.action)
+
+        after = {
+            "phase": result["phase"],
+            "flags": result["flags"],
+            "trust": result["trust"],
+            "turns_left": result["turnsLeft"],
+        }
+        result["narration"] = narrator.narrate(
+            after, history + [f"[점원] {req.action}"], req.action, result["ending"])
+        return result
+
+    return app
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--adapter", required=True)
+    ap.add_argument("--base", default=None, help="생략하면 base_model.txt 사용")
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--max-tokens", type=int, default=160)
+    args = ap.parse_args()
+
+    try:
+        import uvicorn
+    except ImportError:
+        sys.exit("pip install fastapi uvicorn")
+
+    judge = Judge(args.adapter, args.base, args.max_tokens)
+    narrator = Narrator()
+    print(f"\n  http://{args.host}:{args.port}/health  상태 확인")
+    print(f"  http://{args.host}:{args.port}/docs    직접 호출")
+    print(f"  ui.html 을 열면 이 서버에 붙습니다\n")
+    uvicorn.run(build_app(judge, narrator), host=args.host, port=args.port)
+
+
+if __name__ == "__main__":
+    main()
